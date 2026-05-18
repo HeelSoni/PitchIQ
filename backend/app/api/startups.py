@@ -10,6 +10,18 @@ from app.services.insights import generate_ai_insight
 
 router = APIRouter()
 
+@router.get("/seed")
+@router.post("/seed")
+def seed_endpoint(db: Session = Depends(get_db)):
+    from app.scripts.seed import seed_database
+    try:
+        seed_database()
+        return {"status": "success", "message": "Database seeded successfully with Shark Tank India Season 1-5 data."}
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        raise HTTPException(status_code=500, detail=f"Database seeding failed: {str(e)}. Traceback: {error_details}")
+
 @router.get("/stats", response_model=StatsBar)
 def get_global_stats(db: Session = Depends(get_db)):
     total_pitches = db.query(Startup).count()

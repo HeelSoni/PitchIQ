@@ -39,7 +39,8 @@ def seed_database():
     db: Session = SessionLocal()
 
     # 1. Seed Sharks from JSON if exists, otherwise create them
-    sharks_file = "backend/app/data/sharks.json"
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sharks_file = os.path.join(base_dir, "data", "sharks.json")
     sharks_map = {} # name -> id
 
     default_sharks = [
@@ -81,7 +82,7 @@ def seed_database():
         sharks_map[sd["name"].lower()] = shark_obj.id
 
     # 2. Read CSV file
-    csv_path = "backend/app/data/Shark Tank India.csv"
+    csv_path = os.path.join(base_dir, "data", "Shark Tank India.csv")
     if not os.path.exists(csv_path):
         print(f"CSV file not found at {csv_path}")
         return
