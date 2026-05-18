@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #080D1A; /* Futuristic Deep Space Steel */
+  --color-card: #121B2D;       /* Carbon Tech Card */
+  --color-border: #1E2D4A;     /* Cyber-Interface Border */
+  --color-accent: #00F2FE;     /* Breathtaking Neon Cyan (High-Tech Engineering Vibe) */
+  --color-accent-hover: #4FACFE; /* Electric Cyan Blue */
+  --color-success: #00F2FE;
+  --color-warning: #FF9F43;
+  --color-danger: #FF4949;
+  --color-text-primary: #F8FAFC;
+  --color-text-secondary: #94A3B8;
+  
+  --font-sans: 'Inter', 'Outfit', sans-serif;
+}
+
+@layer base {
+  body {
+    background-color: #080D1A;
+    color: #F8FAFC;
+    font-family: 'Inter', 'Outfit', sans-serif;
+  }
+
+  /* Custom Glow Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #080D1A;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #1E2D4A;
+    border-radius: 4px;
+    border: 2px solid #080D1A;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #00F2FE;
+  }
+}
+
+/* Custom styles and premium glassmorphism utility classes */
+.glass {
+  background: rgba(18, 27, 45, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.gradient-text {
+  background-clip: text;
+  color: transparent;
+  background-image: linear-gradient(to right, #00F2FE, #4FACFE);
+}
+
+.gradient-glow {
+  box-shadow: 0 0 40px rgba(0, 242, 254, 0.15);
+}
+
+/* Card hover animation */
+.hover-lift {
+  transition: all 0.3s ease-out;
+}
+.hover-lift:hover {
+  transform: translateY(-4px);
+  border-color: rgba(0, 242, 254, 0.3);
+  box-shadow: 0 10px 30px -10px rgba(0, 242, 254, 0.2);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out forwards;
+}

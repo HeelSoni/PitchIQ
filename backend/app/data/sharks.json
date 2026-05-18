@@ -1,0 +1,90 @@
+[
+  {
+    "id": 1,
+    "name": "Aman Gupta",
+    "company": "boAt",
+    "title": "Co-founder & CMO, boAt",
+    "bio": "Aman Gupta is the co-founder and Chief Marketing Officer of boAt, India's leading consumer electronics brand. Before boAt, he worked at KPMG and Citibank. He's known for his marketing acumen and aggressive deal-making style on Shark Tank India.",
+    "net_worth": "₹700 Cr+",
+    "seasons": [1, 2, 3, 4, 5],
+    "expertise": ["Consumer Electronics", "D2C", "Marketing", "Brand Building"],
+    "image_url": null
+  },
+  {
+    "id": 2,
+    "name": "Ashneer Grover",
+    "company": "BharatPe",
+    "title": "Co-founder & MD, BharatPe",
+    "bio": "Ashneer Grover co-founded BharatPe, a fintech company revolutionizing payments for small merchants. IIT Delhi and IIM Ahmedabad alumnus. Known for his bold, sometimes abrasive opinions and sharp business analysis.",
+    "net_worth": "₹300 Cr+",
+    "seasons": [1, 2],
+    "expertise": ["Fintech", "Payments", "B2B", "Operations"],
+    "image_url": null
+  },
+  {
+    "id": 3,
+    "name": "Namita Thapar",
+    "company": "Emcure Pharmaceuticals",
+    "title": "Executive Director, Emcure Pharmaceuticals",
+    "bio": "Namita Thapar is the Executive Director of Emcure Pharmaceuticals, one of India's largest pharma companies. She champions women entrepreneurs and healthcare startups. Duke University MBA alumna.",
+    "net_worth": "₹600 Cr+",
+    "seasons": [1, 2, 3, 4, 5],
+    "expertise": ["Healthcare", "Pharma", "Women Entrepreneurs", "FMCG"],
+    "image_url": null
+  },
+  {
+    "id": 4,
+    "name": "Anupam Mittal",
+    "company": "Shaadi.com",
+    "title": "Founder & CEO, Shaadi.com",
+    "bio": "Anupam Mittal is the founder and CEO of Shaadi.com, India's pioneer matrimony platform. He's also an active angel investor with 200+ investments. Boston College MBA alumnus.",
+    "net_worth": "₹200 Cr+",
+    "seasons": [1, 2, 3, 4, 5],
+    "expertise": ["Internet", "Marketplace", "SaaS", "Angel Investing"],
+    "image_url": null
+  },
+  {
+    "id": 5,
+    "name": "Vineeta Singh",
+    "company": "SUGAR Cosmetics",
+    "title": "CEO & Co-founder, SUGAR Cosmetics",
+    "bio": "Vineeta Singh is the CEO and co-founder of SUGAR Cosmetics, a leading D2C beauty brand. IIT Madras and IIM Ahmedabad alumna. She turned down a ₹1 Cr salary offer to pursue entrepreneurship.",
+    "net_worth": "₹350 Cr+",
+    "seasons": [1, 2, 3, 4, 5],
+    "expertise": ["Beauty & Cosmetics", "D2C", "Brand Building", "Retail"],
+    "image_url": null
+  },
+  {
+    "id": 6,
+    "name": "Peyush Bansal",
+    "company": "Lenskart",
+    "title": "CEO & Co-founder, Lenskart",
+    "bio": "Peyush Bansal is the co-founder and CEO of Lenskart, revolutionizing eyewear retail in India with omnichannel presence. IIT Delhi alumnus. Known for meticulous due diligence and long-term thinking.",
+    "net_worth": "₹600 Cr+",
+    "seasons": [1, 2, 3, 4, 5],
+    "expertise": ["D2C", "Omnichannel Retail", "Tech", "Eyewear"],
+    "image_url": null
+  },
+  {
+    "id": 7,
+    "name": "Ghazal Alagh",
+    "company": "Mamaearth",
+    "title": "Co-founder & Chief Innovation Officer, Mamaearth",
+    "bio": "Ghazal Alagh co-founded Mamaearth, India's first MADE SAFE certified baby care brand. The company went public in 2023 with a ₹10,000+ Cr valuation. She focuses on purpose-driven brands.",
+    "net_worth": "₹500 Cr+",
+    "seasons": [2, 3, 4, 5],
+    "expertise": ["Baby Care", "Beauty", "FMCG", "D2C"],
+    "image_url": null
+  },
+  {
+    "id": 8,
+    "name": "Amit Jain",
+    "company": "CarDekho",
+    "title": "CEO & Co-founder, CarDekho",
+    "bio": "Amit Jain is the CEO and co-founder of CarDekho Group, a leading auto-tech marketplace in India. IIT Delhi alumnus. The company is a unicorn valued at $1.2 billion.",
+    "net_worth": "₹400 Cr+",
+    "seasons": [3, 4, 5],
+    "expertise": ["Automobile", "Marketplace", "Fintech", "Tech Platforms"],
+    "image_url": null
+  }
+]

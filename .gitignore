@@ -1,0 +1,44 @@
+# Python virtual environment
+venv/
+.venv/
+env/
+ENV/
+*.pyc
+__pycache__/
+
+# Databases
+*.db
+*.sqlite3
+
+# Node dependencies
+node_modules/
+jspm_packages/
+.pnp
+.pnp.js
+
+# Production / Build outputs
+dist/
+build/
+out/
+.next/
+.nuxt/
+.cache/
+
+# Environment configurations
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+backend/.env
+frontend/.env
+
+# IDE / System files
+.vscode/
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

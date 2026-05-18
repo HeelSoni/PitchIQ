@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: pitchiq_db
+    restart: always
+    environment:
+      POSTGRES_USER: pitchiq
+      POSTGRES_PASSWORD: pitchiq_secret
+      POSTGRES_DB: pitchiq
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    container_name: pitchiq_api
+    restart: always
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgresql://pitchiq:pitchiq_secret@postgres:5432/pitchiq
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+
+volumes:
+  postgres_data:
