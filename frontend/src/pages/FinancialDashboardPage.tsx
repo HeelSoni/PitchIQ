@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, LineChart, Line, ScatterChart, Scatter, ZAxis } from 'recharts';
 import { BarChart3, TrendingUp, DollarSign, RefreshCw } from 'lucide-react';
+import { API_BASE } from '../config';
 
 export default function FinancialDashboardPage() {
   const [data, setData] = useState<any>(null);
@@ -10,7 +11,7 @@ export default function FinancialDashboardPage() {
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
-        const res = await axios.get('http://127.0.0.1:8000/api/analytics/dashboard');
+        const res = await axios.get(`${API_BASE}/analytics/dashboard`);
         setData(res.data);
       } catch (err) {
         console.error(err);

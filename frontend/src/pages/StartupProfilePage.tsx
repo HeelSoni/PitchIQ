@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { ArrowLeft, ExternalLink, ShieldCheck, Heart, Award, Users, Activity, Sparkles, DollarSign, Percent } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { API_BASE } from '../config';
 
 export default function StartupProfilePage() {
   const { slug } = useParams<{ slug: string }>();
@@ -12,7 +13,7 @@ export default function StartupProfilePage() {
   useEffect(() => {
     const fetchDetail = async () => {
       try {
-        const res = await axios.get(`http://127.0.0.1:8000/api/startups/detail/${slug}`);
+        const res = await axios.get(`${API_BASE}/startups/detail/${slug}`);
         setStartup(res.data);
       } catch (err) {
         console.error(err);

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { usePitchStore } from '../store/usePitchStore';
 import axios from 'axios';
 import { ArrowLeftRight, CheckCircle2, Trophy } from 'lucide-react';
+import { API_BASE } from '../config';
 
 export default function ComparePage() {
   const { startups, fetchStartups } = usePitchStore();
@@ -19,7 +20,7 @@ export default function ComparePage() {
     if (!slugA || !slugB) return;
     setLoading(true);
     try {
-      const res = await axios.get(`http://127.0.0.1:8000/api/startups/compare?a_slug=${slugA}&b_slug=${slugB}`);
+      const res = await axios.get(`${API_BASE}/startups/compare?a_slug=${slugA}&b_slug=${slugB}`);
       setStartupA(res.data.startup_a);
       setStartupB(res.data.startup_b);
     } catch (err) {

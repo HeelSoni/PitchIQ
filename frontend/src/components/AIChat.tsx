@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send, Bot, User, Sparkles } from 'lucide-react';
 import axios from 'axios';
+import { API_BASE } from '../config';
 
 interface Message {
   sender: 'user' | 'bot';
@@ -42,7 +43,7 @@ export default function AIChat() {
     setLoading(true);
 
     try {
-      const res = await axios.post('http://127.0.0.1:8000/api/chat/', {
+      const res = await axios.post(`${API_BASE}/chat/`, {
         message: userMsg
       });
       setMessages(prev => [...prev, { sender: 'bot', text: res.data.response }]);

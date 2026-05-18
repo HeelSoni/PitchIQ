@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { ShieldAlert, TrendingUp, Users, ArrowUpRight, DollarSign } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { API_BASE } from '../config';
 
 export default function DealBreakdownPage() {
   const [deals, setDeals] = useState<any[]>([]);
@@ -10,7 +11,7 @@ export default function DealBreakdownPage() {
   useEffect(() => {
     const fetchDeals = async () => {
       try {
-        const res = await axios.get('http://127.0.0.1:8000/api/startups/?deal_status=funded&order_by=valuation');
+        const res = await axios.get(`${API_BASE}/startups/?deal_status=funded&order_by=valuation`);
         setDeals(res.data);
       } catch (err) {
         console.error(err);

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePitchStore } from '../store/usePitchStore';
 import { Download, Table, Sparkles, FileSpreadsheet } from 'lucide-react';
+import { API_BASE } from '../config';
 
 export default function DatasetDownloadPage() {
   const { industries, sharks, fetchIndustries, fetchSharks } = usePitchStore();
@@ -21,7 +22,7 @@ export default function DatasetDownloadPage() {
     if (dealStatus) params.append('deal_status', dealStatus);
     if (sharkId) params.append('shark_id', sharkId);
 
-    window.open(`http://127.0.0.1:8000/api/download/csv?${params.toString()}`);
+    window.open(`${API_BASE}/download/csv?${params.toString()}`);
   };
 
   const columns = [

@@ -3,6 +3,7 @@ import { usePitchStore } from '../store/usePitchStore';
 import { Users, Award, ShieldCheck, Heart, ArrowUpRight, TrendingUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import { API_BASE } from '../config';
 
 export default function SharksPage() {
   const { sharks, fetchSharks } = usePitchStore();
@@ -16,7 +17,7 @@ export default function SharksPage() {
   const selectShark = async (sharkId: number) => {
     setLoadingPortfolio(true);
     try {
-      const res = await axios.get(`http://127.0.0.1:8000/api/sharks/${sharkId}`);
+      const res = await axios.get(`${API_BASE}/sharks/${sharkId}`);
       setSelectedShark(res.data);
     } catch (err) {
       console.error(err);

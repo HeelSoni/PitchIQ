@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Award, Zap, Award as GoldIcon, ShieldAlert } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { API_BASE } from '../config';
 
 export default function LeaderboardPage() {
   const [leaderboard, setLeaderboard] = useState<any>(null);
@@ -10,7 +11,7 @@ export default function LeaderboardPage() {
   useEffect(() => {
     const fetchLeaderboard = async () => {
       try {
-        const res = await axios.get('http://127.0.0.1:8000/api/analytics/leaderboard');
+        const res = await axios.get(`${API_BASE}/analytics/leaderboard`);
         setLeaderboard(res.data);
       } catch (err) {
         console.error(err);
