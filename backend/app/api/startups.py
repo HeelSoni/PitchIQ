@@ -56,6 +56,52 @@ def db_debug():
         "db_type": db_type
     }
 
+@router.get("/query-debug")
+def query_debug(db: Session = Depends(get_db)):
+    try:
+        startups_count = db.query(Startup).count()
+        deals_count = db.query(Deal).count()
+        financials_count = db.query(Financial).count()
+        
+        # Test basic startup query
+        startups_list = []
+        raw_startups = db.query(Startup).limit(5).all()
+        for s in raw_startups:
+            startups_list.append({
+                "id": s.id,
+                "name": s.name,
+                "slug": s.slug
+            })
+            
+        # Test join query
+        join_query = db.query(Startup).join(Deal).outerjoin(Financial)
+        join_results = join_query.limit(5).all()
+        join_list = []
+        for s in join_results:
+            join_list.append({
+                "id": s.id,
+                "name": s.name
+            })
+            
+        return {
+            "status": "success",
+            "counts": {
+                "startups": startups_count,
+                "deals": deals_count,
+                "financials": financials_count
+            },
+            "sample_startups": startups_list,
+            "join_results_count": len(join_results),
+            "sample_join_results": join_list
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
 @router.get("/stats", response_model=StatsBar)
 def get_global_stats(db: Session = Depends(get_db)):
     total_pitches = db.query(Startup).count()
