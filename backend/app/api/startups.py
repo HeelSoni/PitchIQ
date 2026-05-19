@@ -28,6 +28,34 @@ def seed_endpoint(db: Session = Depends(get_db)):
         error_details = traceback.format_exc()
         raise HTTPException(status_code=500, detail=f"Database seeding failed: {str(e)}. Traceback: {error_details}")
 
+@router.get("/db-debug")
+def db_debug():
+    import os
+    raw_url = os.getenv("DATABASE_URL", "not set")
+    # Mask password
+    masked_url = raw_url
+    if "@" in raw_url and "://" in raw_url:
+        parts = raw_url.split("@", 1)
+        prefix = parts[0]
+        suffix = parts[1]
+        scheme_and_user = prefix.split("://", 1)
+        if len(scheme_and_user) == 2:
+            scheme, user_pass = scheme_and_user
+            if ":" in user_pass:
+                user = user_pass.split(":", 1)[0]
+                masked_url = f"{scheme}://{user}:****@{suffix}"
+            else:
+                masked_url = f"{scheme}://{user_pass}:****@{suffix}"
+    
+    from app.database import db_type
+    return {
+        "raw_url_length": len(raw_url),
+        "masked_url": masked_url,
+        "starts_with_postgres_proto": raw_url.startswith("postgres://"),
+        "starts_with_postgresql": raw_url.startswith("postgresql"),
+        "db_type": db_type
+    }
+
 @router.get("/stats", response_model=StatsBar)
 def get_global_stats(db: Session = Depends(get_db)):
     total_pitches = db.query(Startup).count()
