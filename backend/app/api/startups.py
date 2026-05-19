@@ -14,9 +14,15 @@ router = APIRouter()
 @router.post("/seed")
 def seed_endpoint(db: Session = Depends(get_db)):
     from app.scripts.seed import seed_database
+    from app.database import db_type
     try:
-        seed_database()
-        return {"status": "success", "message": "Database seeded successfully with Shark Tank India Season 1-5 data."}
+        metrics = seed_database()
+        return {
+            "status": "success",
+            "message": "Database seeded successfully with Shark Tank India Season 1-5 data.",
+            "database_type": db_type,
+            "metrics": metrics
+        }
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()

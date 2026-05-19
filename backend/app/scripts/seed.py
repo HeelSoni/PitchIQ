@@ -38,6 +38,16 @@ def seed_database():
 
     db: Session = SessionLocal()
 
+    # Metrics
+    metrics = {
+        "sharks": 0,
+        "episodes": 0,
+        "startups": 0,
+        "deals": 0,
+        "financials": 0,
+        "shark_deals": 0
+    }
+
     # 1. Seed Sharks from JSON if exists, otherwise create them
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sharks_file = os.path.join(base_dir, "data", "sharks.json")
@@ -80,12 +90,12 @@ def seed_database():
         db.add(shark_obj)
         db.flush()
         sharks_map[sd["name"].lower()] = shark_obj.id
+        metrics["sharks"] += 1
 
     # 2. Read CSV file
     csv_path = os.path.join(base_dir, "data", "Shark Tank India.csv")
     if not os.path.exists(csv_path):
-        print(f"CSV file not found at {csv_path}")
-        return
+        raise FileNotFoundError(f"CSV file not found at {csv_path}. Please verify the path.")
 
     df = pd.read_csv(csv_path)
 
@@ -113,6 +123,7 @@ def seed_database():
             db.add(episode)
             db.flush()
             episodes_map[ep_key] = episode.id
+            metrics["episodes"] += 1
 
         ep_id = episodes_map[ep_key]
 
@@ -166,6 +177,7 @@ def seed_database():
         )
         db.add(startup)
         db.flush()
+        metrics["startups"] += 1
 
         # Seed financials
         rev = clean_float(row.get("Yearly Revenue"))
@@ -193,6 +205,7 @@ def seed_database():
             repeat_rate=None
         )
         db.add(financial)
+        metrics["financials"] += 1
 
         # Seed Deal
         received_offer = clean_int(row.get("Received Offer"))
@@ -230,6 +243,7 @@ def seed_database():
         )
         db.add(deal)
         db.flush()
+        metrics["deals"] += 1
 
         # Seed Shark Investments
         if deal_status == "funded":
@@ -253,6 +267,7 @@ def seed_database():
                             equity_taken=s_eq
                         )
                         db.add(s_deal)
+                        metrics["shark_deals"] += 1
 
             # Seed guest investments
             guest_amt = clean_float(row.get("Guest Investment Amount"))
@@ -275,6 +290,7 @@ def seed_database():
                     db.add(g_shark)
                     db.flush()
                     sharks_map[g_key] = g_shark.id
+                    metrics["sharks"] += 1
 
                 g_id = sharks_map[g_key]
                 s_deal = SharkDeal(
@@ -284,10 +300,12 @@ def seed_database():
                     equity_taken=guest_eq
                 )
                 db.add(s_deal)
+                metrics["shark_deals"] += 1
 
     db.commit()
     db.close()
     print("Database seeding completed successfully!")
+    return metrics
 
 if __name__ == "__main__":
     seed_database()
