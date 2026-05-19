@@ -56,43 +56,40 @@ def db_debug():
         "db_type": db_type
     }
 
-@router.get("/query-debug")
-def query_debug(db: Session = Depends(get_db)):
+@router.get("/test-combined")
+def test_combined(db: Session = Depends(get_db)):
     try:
         startups_count = db.query(Startup).count()
         deals_count = db.query(Deal).count()
-        financials_count = db.query(Financial).count()
         
-        # Test basic startup query
-        startups_list = []
-        raw_startups = db.query(Startup).limit(5).all()
-        for s in raw_startups:
-            startups_list.append({
-                "id": s.id,
-                "name": s.name,
-                "slug": s.slug
-            })
-            
-        # Test join query
-        join_query = db.query(Startup).join(Deal).outerjoin(Financial)
-        join_results = join_query.limit(5).all()
-        join_list = []
-        for s in join_results:
-            join_list.append({
-                "id": s.id,
-                "name": s.name
-            })
-            
+        # Test distinct industries
+        industries_raw = db.query(Startup.industry).distinct().all()
+        industries = sorted([i[0] for i in industries_raw if i[0] is not None])
+        
+        # Test join count
+        join_count = db.query(Startup).join(Deal).outerjoin(Financial).count()
+        
+        # Test stats logic
+        total_pitches = db.query(Startup).count()
+        total_deals = db.query(Deal).filter(Deal.deal_status == "funded").count()
+        investment_sum = db.query(Deal).filter(Deal.deal_status == "funded").with_entities(Deal.final_deal_amount).all()
+        total_investment = sum([x[0] for x in investment_sum if x[0] is not None])
+        success_rate = (total_deals / total_pitches * 100) if total_pitches > 0 else 0.0
+        
         return {
             "status": "success",
-            "counts": {
+            "db_counts": {
                 "startups": startups_count,
                 "deals": deals_count,
-                "financials": financials_count
+                "join_count": join_count
             },
-            "sample_startups": startups_list,
-            "join_results_count": len(join_results),
-            "sample_join_results": join_list
+            "industries": industries,
+            "calculated_stats": {
+                "total_pitches": total_pitches,
+                "total_deals": total_deals,
+                "total_investment": round(total_investment, 2),
+                "success_rate": round(success_rate, 2)
+            }
         }
     except Exception as e:
         import traceback
