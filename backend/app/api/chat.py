@@ -47,7 +47,7 @@ def build_db_context(msg: str, db: Session) -> str:
     industry_stats = db.query(
         Startup.industry,
         func.count(Startup.id).label("count"),
-        func.sum(case([(Deal.deal_status == "funded", 1)], else_=0)).label("funded")
+        func.sum(case((Deal.deal_status == "funded", 1), else_=0)).label("funded")
     ).join(Deal).group_by(Startup.industry).order_by(desc("funded")).limit(15).all()
 
     if industry_stats:
