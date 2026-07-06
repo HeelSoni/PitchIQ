@@ -1,261 +1,178 @@
 from fastapi import APIRouter, Depends, Body
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, case
 from app.database import get_db
 from app.models.models import Startup, Deal, SharkDeal, Shark, Financial
 import os
 import httpx
+import json
 
 router = APIRouter()
 
 
-def query_huggingface(prompt: str):
+def build_db_context(msg: str, db: Session) -> str:
+    """
+    Fetches relevant data from the database based on keywords in the message
+    and formats it as a rich context string for the LLM to use.
+    """
+    context_parts = []
+
+    # --- Global stats always included ---
+    total_pitches = db.query(Startup).count()
+    total_funded = db.query(Deal).filter(Deal.deal_status == "funded").count()
+    total_investment = db.query(func.sum(Deal.final_deal_amount)).filter(Deal.deal_status == "funded").scalar() or 0
+    success_rate = round((total_funded / total_pitches * 100), 1) if total_pitches > 0 else 0
+
+    context_parts.append(
+        f"GLOBAL STATS: {total_pitches} total pitches, {total_funded} funded deals, "
+        f"₹{total_investment:,.0f} Lakhs total investment, {success_rate}% success rate across Seasons 1-5."
+    )
+
+    # --- Shark stats ---
+    shark_data = db.query(
+        Shark.name, Shark.company, Shark.bio,
+        func.count(SharkDeal.id).label("deals"),
+        func.sum(SharkDeal.amount_invested).label("total_invested")
+    ).outerjoin(SharkDeal, SharkDeal.shark_id == Shark.id)\
+     .group_by(Shark.id).all()
+
+    shark_lines = []
+    for s in shark_data:
+        amt = f"₹{s[4]:,.0f} Lakhs" if s[4] else "₹0"
+        shark_lines.append(f"{s[0]} ({s[1]}): {s[3]} deals, {amt} invested. Bio: {(s[2] or '')[:100]}")
+    if shark_lines:
+        context_parts.append("SHARKS:\n" + "\n".join(shark_lines))
+
+    # --- Industry breakdown ---
+    industry_stats = db.query(
+        Startup.industry,
+        func.count(Startup.id).label("count"),
+        func.sum(case([(Deal.deal_status == "funded", 1)], else_=0)).label("funded")
+    ).join(Deal).group_by(Startup.industry).order_by(desc("funded")).limit(15).all()
+
+    if industry_stats:
+        ind_lines = [f"{i[0]}: {i[1]} pitches, {i[2]} funded" for i in industry_stats if i[0]]
+        context_parts.append("INDUSTRIES:\n" + "\n".join(ind_lines))
+
+    # --- Season breakdown ---
+    season_stats = db.query(
+        Startup.season,
+        func.count(Startup.id).label("pitches"),
+        func.sum(Deal.final_deal_amount).label("total_inv")
+    ).join(Deal).group_by(Startup.season).order_by(Startup.season).all()
+
+    if season_stats:
+        season_lines = [
+            f"Season {s[0]}: {s[1]} pitches, ₹{s[2]:,.0f} Lakhs invested" if s[2] else f"Season {s[0]}: {s[1]} pitches"
+            for s in season_stats
+        ]
+        context_parts.append("SEASONS:\n" + "\n".join(season_lines))
+
+    # --- Relevant startups based on message keywords ---
+    keywords = [w for w in msg.split() if len(w) > 3]
+    found_startups = []
+    for kw in keywords[:5]:  # check first 5 meaningful words
+        results = db.query(Startup).filter(Startup.name.ilike(f"%{kw}%")).limit(3).all()
+        for r in results:
+            if r not in found_startups:
+                found_startups.append(r)
+
+    # Also try full message match
+    full_match = db.query(Startup).filter(Startup.name.ilike(f"%{msg[:30]}%")).limit(3).all()
+    for r in full_match:
+        if r not in found_startups:
+            found_startups.append(r)
+
+    if found_startups:
+        startup_lines = []
+        for s in found_startups[:5]:
+            d = s.deal
+            if d:
+                status = "Funded" if d.deal_status == "funded" else "Not Funded"
+                amt = f"₹{d.final_deal_amount:,.0f}L for {d.final_equity}%" if d.final_deal_amount else "N/A"
+                ask = f"₹{d.ask_amount:,.0f}L for {d.ask_equity}%" if d.ask_amount else "N/A"
+                startup_lines.append(
+                    f"{s.name} (Season {s.season}, {s.industry}): Asked {ask}, Status: {status}, Deal: {amt}. "
+                    f"Desc: {(s.description or '')[:100]}"
+                )
+        if startup_lines:
+            context_parts.append("RELEVANT STARTUPS:\n" + "\n".join(startup_lines))
+
+    return "\n\n".join(context_parts)
+
+
+def query_gemini(question: str, context: str) -> str | None:
+    """Call Google Gemini free API with database context."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return None
+
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        
+        system_prompt = (
+            "You are PitchIQ AI — an expert analyst specializing in Shark Tank India. "
+            "You have access to real-time data from all 5 seasons of Shark Tank India. "
+            "Answer questions naturally, helpfully, and in a friendly but professional tone. "
+            "Use the database context provided to give accurate, data-backed answers. "
+            "Format responses with markdown bold (**text**) and bullet points where helpful. "
+            "Keep responses concise but complete. If asked about something not in the data, "
+            "say so honestly and offer related insights you do have."
+        )
+
+        full_prompt = (
+            f"{system_prompt}\n\n"
+            f"DATABASE CONTEXT (real-time data from PitchIQ):\n{context}\n\n"
+            f"USER QUESTION: {question}\n\n"
+            f"Answer:"
+        )
+
+        payload = {
+            "contents": [{"parts": [{"text": full_prompt}]}],
+            "generationConfig": {
+                "temperature": 0.7,
+                "maxOutputTokens": 400,
+                "topP": 0.9
+            }
+        }
+
+        response = httpx.post(url, json=payload, timeout=10.0)
+        if response.status_code == 200:
+            data = response.json()
+            candidates = data.get("candidates", [])
+            if candidates:
+                return candidates[0]["content"]["parts"][0]["text"]
+    except Exception as e:
+        print(f"Gemini query failed: {e}")
+    return None
+
+
+def query_huggingface(question: str, context: str) -> str | None:
+    """Fallback: HuggingFace with context."""
     api_key = os.getenv("HUGGINGFACE_API_KEY")
     if not api_key:
         return None
     try:
         API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
         headers = {"Authorization": f"Bearer {api_key}"}
+        prompt = (
+            f"[INST] You are PitchIQ AI, an expert on Shark Tank India. "
+            f"Use this data to answer the question:\n\n{context[:1500]}\n\n"
+            f"Question: {question}\nAnswer concisely: [/INST]"
+        )
         payload = {
-            "inputs": f"You are PitchIQ AI, an expert analyst on Shark Tank India. Answer this query clearly and professionally: {prompt}",
-            "parameters": {"max_new_tokens": 250, "temperature": 0.7}
+            "inputs": prompt,
+            "parameters": {"max_new_tokens": 300, "temperature": 0.7, "return_full_text": False}
         }
-        response = httpx.post(API_URL, headers=headers, json=payload, timeout=6.0)
+        response = httpx.post(API_URL, headers=headers, json=payload, timeout=8.0)
         if response.status_code == 200:
             res_json = response.json()
-            if isinstance(res_json, list) and "generated_text" in res_json[0]:
-                return res_json[0]["generated_text"]
+            if isinstance(res_json, list) and res_json:
+                text = res_json[0].get("generated_text", "")
+                if text and len(text) > 20:
+                    return text.strip()
     except Exception as e:
         print(f"HuggingFace query failed: {e}")
-    return None
-
-
-def smart_answer(msg: str, db: Session) -> str | None:
-    """
-    Smart intent engine - tries to detect what the user is asking
-    and answers using live database queries.
-    Returns None if no intent matched.
-    """
-
-    # ── Intent: Specific startup lookup ──────────────────────────────────────
-    # e.g. "tell me about skippi", "what happened with boat hearing", "skippi deal"
-    startup_keywords = ["tell me about", "what about", "info on", "details about", "what happened with", "startup called"]
-    matched_startup_phrase = next((kw for kw in startup_keywords if kw in msg), None)
-    if matched_startup_phrase:
-        query_term = msg.split(matched_startup_phrase)[-1].strip().strip("?").strip()
-        if query_term:
-            startup = db.query(Startup).filter(Startup.name.ilike(f"%{query_term}%")).first()
-            if startup and startup.deal:
-                d = startup.deal
-                status = "✅ Funded" if d.deal_status == "funded" else "❌ Not Funded"
-                amt = f"₹{d.final_deal_amount:,.0f} Lakhs" if d.final_deal_amount else "N/A"
-                eq = f"{d.final_equity}%" if d.final_equity else "N/A"
-                ask = f"₹{d.ask_amount:,.0f} Lakhs for {d.ask_equity}% equity" if d.ask_amount else "N/A"
-                return (
-                    f"📋 **{startup.name}** — Season {startup.season}\n\n"
-                    f"• **Industry:** {startup.industry or 'N/A'}\n"
-                    f"• **Original Ask:** {ask}\n"
-                    f"• **Deal Status:** {status}\n"
-                    f"• **Final Deal:** {amt} for {eq}\n\n"
-                    f"_{startup.description[:200] + '...' if startup.description and len(startup.description) > 200 else startup.description or 'No description available.'}_"
-                )
-
-    # ── Intent: Named startup by name directly ────────────────────────────────
-    # e.g. "skippi ice pops", "boAt", "sugar cosmetics deal"
-    # Try to find a startup whose name is mentioned in the message
-    words = msg.replace("?", "").replace("!", "").strip()
-    if len(words) > 2:
-        # Try matching 2-3 word combos
-        all_startups = db.query(Startup).filter(
-            Startup.name.ilike(f"%{words[:20]}%")
-        ).first()
-        if not all_startups:
-            # Try first word
-            first_word = words.split()[0] if words.split() else ""
-            if len(first_word) > 3:
-                all_startups = db.query(Startup).filter(
-                    Startup.name.ilike(f"%{first_word}%")
-                ).first()
-
-        if all_startups and all_startups.deal:
-            s = all_startups
-            d = s.deal
-            status = "✅ Funded" if d.deal_status == "funded" else "❌ Not Funded"
-            amt = f"₹{d.final_deal_amount:,.0f} Lakhs" if d.final_deal_amount else "N/A"
-            eq = f"{d.final_equity}%" if d.final_equity else "N/A"
-            ask = f"₹{d.ask_amount:,.0f} Lakhs for {d.ask_equity}% equity" if d.ask_amount else "N/A"
-            return (
-                f"📋 **{s.name}** — Season {s.season}\n\n"
-                f"• **Industry:** {s.industry or 'N/A'}\n"
-                f"• **Original Ask:** {ask}\n"
-                f"• **Deal Status:** {status}\n"
-                f"• **Final Deal:** {amt} for {eq}\n\n"
-                f"_{s.description[:200] + '...' if s.description and len(s.description) > 200 else s.description or 'No description available.'}_"
-            )
-
-    # ── Intent: Which shark invested the most ────────────────────────────────
-    if any(kw in msg for kw in ["most invest", "top shark", "highest invest", "best shark", "most deal", "most money", "richest shark"]):
-        sharks = db.query(
-            Shark.name,
-            func.count(SharkDeal.id).label("deals"),
-            func.sum(SharkDeal.amount_invested).label("total")
-        ).join(SharkDeal, SharkDeal.shark_id == Shark.id)\
-         .group_by(Shark.id)\
-         .order_by(desc("total")).limit(5).all()
-
-        if sharks:
-            lines = "\n".join([
-                f"• **{s[0]}:** {s[1]} deals | ₹{s[2]:,.0f} Lakhs" if s[2] else f"• **{s[0]}:** {s[1]} deals"
-                for s in sharks
-            ])
-            top = sharks[0]
-            return (
-                f"💰 **Top Sharks by Total Investment:**\n\n{lines}\n\n"
-                f"**{top[0]}** leads overall with the highest capital deployed across Shark Tank India!"
-            )
-
-    # ── Intent: Success rate / funded stats ─────────────────────────────────
-    if any(kw in msg for kw in ["success rate", "how many funded", "funded startup", "percentage funded", "get deal", "get funded"]):
-        total = db.query(Startup).count()
-        funded = db.query(Deal).filter(Deal.deal_status == "funded").count()
-        rate = round((funded / total * 100), 1) if total > 0 else 0
-        return (
-            f"📊 **Shark Tank India Funding Statistics:**\n\n"
-            f"• **Total Pitches:** {total}\n"
-            f"• **Funded Deals:** {funded}\n"
-            f"• **Not Funded:** {total - funded}\n"
-            f"• **Success Rate:** {rate}%\n\n"
-            f"So roughly **{rate}%** of entrepreneurs who entered the tank walked out with a deal!"
-        )
-
-    # ── Intent: Industry-specific queries ────────────────────────────────────
-    industries = ["food", "health", "tech", "fashion", "beauty", "edtech", "fintech",
-                  "agri", "farm", "ev", "electric", "d2c", "saas", "retail", "education",
-                  "medical", "wellness", "fitness"]
-    matched_industry = next((ind for ind in industries if ind in msg), None)
-    if matched_industry and any(kw in msg for kw in ["funded", "invest", "deal", "startup", "industry", "which", "how many"]):
-        startups = db.query(Startup).join(Deal)\
-            .filter(Startup.industry.ilike(f"%{matched_industry}%"))\
-            .filter(Deal.deal_status == "funded").all()
-        count = len(startups)
-        names = ", ".join([s.name for s in startups[:5]])
-        return (
-            f"🏭 **{matched_industry.upper()} Industry on Shark Tank India:**\n\n"
-            f"• **Total Funded:** {count} startups\n"
-            f"• **Notable Names:** {names}{'...' if count > 5 else ''}\n\n"
-            f"You can explore all {matched_industry} startups in detail using the Industry filter on the PitchIQ dashboard!"
-        )
-
-    # ── Intent: Specific shark stats ─────────────────────────────────────────
-    shark_names = {
-        "aman": "aman gupta",
-        "namita": "namita thapar",
-        "anupam": "anupam mittal",
-        "vineeta": "vineeta singh",
-        "peyush": "peyush bansal",
-        "ashneer": "ashneer grover",
-        "amit": "amit jain",
-        "ritesh": "ritesh agarwal",
-    }
-    matched_shark_key = next((k for k in shark_names if k in msg), None)
-
-    # Handle comparison (two sharks mentioned)
-    mentioned_sharks = [k for k in shark_names if k in msg]
-    if len(mentioned_sharks) == 2:
-        results = []
-        for key in mentioned_sharks:
-            shark = db.query(Shark).filter(Shark.name.ilike(f"%{key}%")).first()
-            if shark:
-                deals = db.query(SharkDeal).filter(SharkDeal.shark_id == shark.id).count()
-                total_amt = db.query(func.sum(SharkDeal.amount_invested))\
-                    .filter(SharkDeal.shark_id == shark.id).scalar() or 0
-                results.append((shark.name, deals, total_amt))
-        if len(results) == 2:
-            a, b = results[0], results[1]
-            return (
-                f"🤝 **Investment Comparison:**\n\n"
-                f"• **{a[0]}:** {a[1]} deals | ₹{a[2]:,.0f} Lakhs invested\n"
-                f"• **{b[0]}:** {b[1]} deals | ₹{b[2]:,.0f} Lakhs invested\n\n"
-                f"**{'  ' + a[0] if a[2] > b[2] else b[0]}** has deployed more capital overall!"
-            )
-
-    # Single shark stats
-    if matched_shark_key and any(kw in msg for kw in ["invest", "deal", "how many", "stats", "portfolio", "much", "total"]):
-        shark = db.query(Shark).filter(Shark.name.ilike(f"%{matched_shark_key}%")).first()
-        if shark:
-            deals = db.query(SharkDeal).filter(SharkDeal.shark_id == shark.id).count()
-            total_amt = db.query(func.sum(SharkDeal.amount_invested))\
-                .filter(SharkDeal.shark_id == shark.id).scalar() or 0
-            return (
-                f"🦈 **{shark.name} — Investment Portfolio:**\n\n"
-                f"• **Total Deals:** {deals}\n"
-                f"• **Total Invested:** ₹{total_amt:,.0f} Lakhs\n"
-                f"• **Company:** {shark.company}\n"
-                f"• **Bio:** {shark.bio[:200] + '...' if shark.bio and len(shark.bio) > 200 else shark.bio or 'N/A'}"
-            )
-
-    # ── Intent: Season-based queries ─────────────────────────────────────────
-    if "season" in msg and any(kw in msg for kw in ["best", "most", "deal", "investment", "how many", "total"]):
-        season_stats = db.query(
-            Startup.season,
-            func.count(Startup.id).label("pitches"),
-            func.sum(Deal.final_deal_amount).label("total_inv")
-        ).join(Deal).group_by(Startup.season).order_by(Startup.season).all()
-
-        if season_stats:
-            lines = "\n".join([
-                f"• **Season {s[0]}:** {s[1]} pitches | ₹{s[2]:,.0f} Lakhs invested" if s[2] else f"• **Season {s[0]}:** {s[1]} pitches"
-                for s in season_stats
-            ])
-            return f"📅 **Season-by-Season Breakdown:**\n\n{lines}"
-
-    # ── Intent: EBITDA / financial terms ─────────────────────────────────────
-    if "ebitda" in msg:
-        return (
-            "📈 **What is EBITDA?**\n\n"
-            "**EBITDA** = Earnings Before Interest, Taxes, Depreciation, and Amortization.\n\n"
-            "It measures a startup's core operational profitability before accounting treatments.\n\n"
-            "**Example:** A D2C brand earns ₹1 Cr revenue, spends ₹60L on materials and marketing, "
-            "₹20L on salaries. EBITDA = **₹20 Lakhs** (20% margin).\n\n"
-            "Sharks use EBITDA margin to check if the business model is viable before any debt or tax impact."
-        )
-
-    if any(kw in msg for kw in ["valuation", "how is valuation", "calculate valuation"]):
-        return (
-            "💡 **How is Valuation Calculated on Shark Tank India?**\n\n"
-            "**Formula:** Valuation = (Investment Amount ÷ Equity %) × 100\n\n"
-            "**Example:** If a startup asks for ₹50 Lakhs for 10% equity:\n"
-            "Valuation = (50 ÷ 10) × 100 = **₹500 Lakhs (₹5 Crore)**\n\n"
-            "Sharks negotiate the valuation by either adjusting the investment amount or equity percentage."
-        )
-
-    if any(kw in msg for kw in ["equity", "what is equity", "explain equity"]):
-        return (
-            "📊 **What is Equity?**\n\n"
-            "Equity is the ownership percentage in a company. When a shark invests for 10% equity, "
-            "they own 10% of that business.\n\n"
-            "**Example:** If PitchIQ is valued at ₹10 Crore and Aman Gupta takes 10% equity "
-            "for ₹1 Crore, he now owns 10% of the company."
-        )
-
-    # ── Intent: All sharks list ───────────────────────────────────────────────
-    if any(kw in msg for kw in ["list shark", "all shark", "who are the shark", "which shark"]) and "invest" not in msg:
-        sharks = db.query(Shark).limit(10).all()
-        lines = "\n".join([f"• **{s.name}** — {s.company}" for s in sharks])
-        return f"🦈 **Sharks on Shark Tank India:**\n\n{lines}"
-
-    # ── Intent: Total investment overall ─────────────────────────────────────
-    if any(kw in msg for kw in ["total investment", "total money", "how much invested", "overall investment"]):
-        total = db.query(func.sum(Deal.final_deal_amount))\
-            .filter(Deal.deal_status == "funded").scalar() or 0
-        count = db.query(Deal).filter(Deal.deal_status == "funded").count()
-        return (
-            f"💰 **Total Investment on Shark Tank India:**\n\n"
-            f"• **Total Capital Deployed:** ₹{total:,.0f} Lakhs\n"
-            f"• **Across:** {count} funded deals\n\n"
-            f"That is roughly ₹{total/100:,.1f} Crores invested across all seasons!"
-        )
-
     return None
 
 
@@ -264,28 +181,40 @@ def chat_with_pitch_iq(
     message: str = Body(..., embed=True),
     db: Session = Depends(get_db)
 ):
-    msg = message.strip().lower()
+    msg = message.strip()
+    msg_lower = msg.lower()
 
-    # 1. Try smart intent engine first
-    smart_response = smart_answer(msg, db)
-    if smart_response:
-        return {"response": smart_response}
+    # Build rich DB context for this question
+    context = build_db_context(msg_lower, db)
 
-    # 2. Try HuggingFace if API key available
-    hf_response = query_huggingface(message)
+    # 1. Try Gemini (best quality, free tier)
+    gemini_response = query_gemini(msg, context)
+    if gemini_response:
+        return {"response": gemini_response.strip()}
+
+    # 2. Try HuggingFace fallback
+    hf_response = query_huggingface(msg, context)
     if hf_response:
         return {"response": hf_response}
 
-    # 3. Helpful fallback with context
+    # 3. No API key configured — return the context-based data directly
+    # This at least gives the user relevant data even without an LLM
+    stats_line = context.split("GLOBAL STATS: ")[-1].split("\n")[0] if "GLOBAL STATS:" in context else ""
+    relevant_startup = ""
+    if "RELEVANT STARTUPS:" in context:
+        first_startup = context.split("RELEVANT STARTUPS:\n")[-1].split("\n")[0]
+        relevant_startup = f"\n\n📋 **Most Relevant Match:** {first_startup}"
+
     return {
         "response": (
-            "🤔 I didn't quite catch that! I'm built to answer questions about Shark Tank India data. Try asking:\n\n"
-            "• _\"Tell me about Skippi Ice Pops\"_\n"
-            "• _\"Which shark invested the most?\"_\n"
-            "• _\"How many food startups got funded?\"_\n"
-            "• _\"What is EBITDA?\"_\n"
-            "• _\"Compare Aman Gupta vs Namita Thapar\"_\n"
-            "• _\"What is the success rate?\"_\n"
-            "• _\"Show me season-wise investments\"_"
+            f"📊 Here's what PitchIQ's database says:\n\n"
+            f"**{stats_line}**"
+            f"{relevant_startup}\n\n"
+            f"💡 _To get full AI answers to any question, add a **GEMINI_API_KEY** in your Render environment variables. "
+            f"Get a free key at [Google AI Studio](https://aistudio.google.com/app/apikey)._\n\n"
+            f"Meanwhile, try asking:\n"
+            f"• _\"Which shark invested the most?\"_\n"
+            f"• _\"Tell me about Skippi Ice Pops\"_\n"
+            f"• _\"How many food startups got funded?\"_"
         )
     }
