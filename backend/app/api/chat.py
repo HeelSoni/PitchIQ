@@ -97,7 +97,7 @@ def query_gemini(question: str, context: str):
         return None
 
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
         full_prompt = (
             "You are PitchIQ AI, an expert analyst on Shark Tank India. "
             "Use the real database context below to answer accurately. "
@@ -495,7 +495,7 @@ def test_gemini_connection():
     if not api_key:
         return {"status": "error", "message": "GEMINI_API_KEY not set in environment variables"}
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
         payload = {"contents": [{"parts": [{"text": "Say: PitchIQ Gemini OK"}]}]}
         response = httpx.post(url, json=payload, timeout=10.0)
         if response.status_code == 200:
