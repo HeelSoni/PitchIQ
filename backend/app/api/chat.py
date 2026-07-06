@@ -503,6 +503,11 @@ def test_gemini_connection():
             text = data["candidates"][0]["content"]["parts"][0]["text"]
             return {"status": "success", "gemini_says": text.strip(), "key_preview": api_key[:10] + "..."}
         else:
-            return {"status": "api_error", "code": response.status_code, "detail": response.text[:300]}
+            return {
+                "status": "api_error", 
+                "code": response.status_code, 
+                "detail": response.text[:300],
+                "key_preview": f"{api_key[:6]}...{api_key[-6:]}" if api_key else None
+            }
     except Exception as e:
-        return {"status": "exception", "error": str(e)}
+        return {"status": "exception", "error": str(e), "key_preview": f"{api_key[:6]}...{api_key[-6:]}" if api_key else None}
