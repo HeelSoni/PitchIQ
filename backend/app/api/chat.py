@@ -503,10 +503,15 @@ def test_gemini_connection():
             text = data["candidates"][0]["content"]["parts"][0]["text"]
             return {"status": "success", "gemini_says": text.strip(), "key_preview": api_key[:10] + "..."}
         else:
+            # Query the list of models to see what is available
+            models_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+            models_resp = httpx.get(models_url, timeout=10.0)
+            models_list = models_resp.json() if models_resp.status_code == 200 else f"Failed to list models: {models_resp.status_code} {models_resp.text[:200]}"
             return {
                 "status": "api_error", 
                 "code": response.status_code, 
                 "detail": response.text[:300],
+                "available_models": models_list,
                 "key_preview": f"{api_key[:6]}...{api_key[-6:]}" if api_key else None
             }
     except Exception as e:
